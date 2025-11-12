@@ -1,44 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart'; // Allowed package for date/time formatting
 
 // --- 1. Model Definition (Data Structure) ---
 class Task {
   final String id;
   final String title;
   bool isCompleted;
+  final DateTime? scheduledTime; // New: Optional scheduled time for the task
 
   Task({
     required this.id,
     required this.title,
     this.isCompleted = false,
+    this.scheduledTime, // Initialize scheduledTime
   });
 }
 
 // --- 2. State Management (Business Logic) ---
 // TaskModel holds the data and logic, extending ChangeNotifier.
 class TaskModel extends ChangeNotifier {
-  // Initial list of tasks
-  List<Task> _tasks = [
-    Task(id: '1', title: 'Learn State Management', isCompleted: true),
-    Task(id: '2', title: 'Build a Todo App', isCompleted: false),
-    Task(id: '3', title: 'Explore Provider Package', isCompleted: false),
-    Task(id: '4', title: 'Go for a run', isCompleted: false),
-    Task(id: '5', title: 'Read a book', isCompleted: false),
-  ];
+  List<Task> _tasks = <Task>[];
 
   // Getter to provide a copy of the tasks list (best practice)
-  List<Task> get tasks => [..._tasks];
+  List<Task> get tasks => <Task>[..._tasks];
 
-  // Getter for the count of incomplete tasks
-  int get incompleteTasksCount => _tasks.where((Task task) => !task.isCompleted).length;
+  // New: Getter for the count of completed tasks
+  int get completedTaskCount => _tasks.where((Task task) => task.isCompleted).length;
 
-  void addTask(String title) {
+  // New: Getter for the total number of tasks
+  int get totalTaskCount => _tasks.length;
+
+  // New: Getter to check if all tasks are completed
+  bool get areAllTasksCompleted => totalTaskCount > 0 && completedTaskCount == totalTaskCount;
+
+  void addTask(String title, DateTime? scheduledTime) {
     if (title.isNotEmpty) {
       _tasks.add(Task(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: title,
         isCompleted: false,
+        scheduledTime: scheduledTime, // Pass scheduledTime to the task
       ));
       // Notify listeners (UI widgets) that the data has changed.
       notifyListeners();
@@ -100,41 +103,10 @@ class TodoScreen extends StatelessWidget {
 
   // A helper function to display a dialog for adding a new task
   void _showAddTaskDialog(BuildContext context) {
-    final TextEditingController controller = TextEditingController();
     showDialog<void>(
       context: context,
       builder: (BuildContext ctx) {
-        return AlertDialog(
-          title: const Text('Add New Task'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: 'e.g., Buy groceries',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (controller.text.isNotEmpty) {
-                  Provider.of<TaskModel>(context, listen: false)
-                      .addTask(controller.text);
-                  Navigator.of(ctx).pop();
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Task title cannot be empty')),
-                  );
-                }
-              },
-              child: const Text('Add Task'),
-            ),
-          ],
-        );
+        return const AddTaskDialog(); // Use the new stateful dialog widget
       },
     );
   }
@@ -177,15 +149,33 @@ class TodoScreen extends StatelessWidget {
                       const SizedBox(height: 8),
                       Consumer<TaskModel>(
                         builder: (BuildContext context, TaskModel model, Widget? child) {
-                          final int incompleteCount = model.incompleteTasksCount;
-                          return Text(
-                            incompleteCount == 0
-                                ? 'All tasks completed! 🎉'
-                                : '$incompleteCount tasks remaining',
-                            style: GoogleFonts.lato(
-                              fontSize: 18,
-                              color: Colors.white70,
-                            ),
+                          if (model.totalTaskCount == 0) {
+                            return const SizedBox.shrink(); // No tasks, hide stats
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                '${model.completedTaskCount} of ${model.totalTaskCount} tasks completed',
+                                style: GoogleFonts.lato(
+                                  fontSize: 16,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                              if (model.areAllTasksCompleted)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4.0),
+                                  child: Text(
+                                    'All tasks completed!',
+                                    style: GoogleFonts.lato(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           );
                         },
                       ),
@@ -286,6 +276,160 @@ class TodoScreen extends StatelessWidget {
   }
 }
 
+// New Widget: AddTaskDialog for date/time input
+class AddTaskDialog extends StatefulWidget {
+  const AddTaskDialog({super.key});
+
+  @override
+  State<AddTaskDialog> createState() => _AddTaskDialogState();
+}
+
+class _AddTaskDialogState extends State<AddTaskDialog> {
+  final TextEditingController _titleController = TextEditingController();
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedTime;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)), // A year ago
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)), // 5 years from now
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+      });
+    }
+  }
+
+  Future<void> _pickTime() async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime ?? TimeOfDay.now(),
+    );
+    if (picked != null && picked != _selectedTime) {
+      setState(() {
+        _selectedTime = picked;
+      });
+    }
+  }
+
+  void _addTask() {
+    final String title = _titleController.text.trim();
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Task title cannot be empty')),
+      );
+      return;
+    }
+
+    DateTime? scheduledDateTime;
+    if (_selectedDate != null) {
+      scheduledDateTime = DateTime(
+        _selectedDate!.year,
+        _selectedDate!.month,
+        _selectedDate!.day,
+        _selectedTime?.hour ?? 0,
+        _selectedTime?.minute ?? 0,
+      );
+    }
+
+    Provider.of<TaskModel>(context, listen: false)
+        .addTask(title, scheduledDateTime);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add New Task'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            TextField(
+              controller: _titleController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'e.g., Buy groceries',
+                labelText: 'Task Title',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.calendar_today),
+                    label: const Text('Select Date'),
+                    onPressed: _pickDate,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.access_time),
+                    label: const Text('Select Time'),
+                    onPressed: _pickTime,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_selectedDate != null || _selectedTime != null)
+              Container(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Scheduled:',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    if (_selectedDate != null)
+                      Text(
+                        DateFormat('EEE, MMM d, yyyy').format(_selectedDate!),
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    if (_selectedTime != null)
+                      Text(
+                        _selectedTime!.format(context),
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _addTask,
+          child: const Text('Add Task'),
+        ),
+      ],
+    );
+  }
+}
+
 // New Widget: TaskCard to encapsulate the display of a single task
 class TaskCard extends StatelessWidget {
   final Task task;
@@ -294,11 +438,40 @@ class TaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Determine reminder status for visual cues
+    bool isOverdue = false;
+    bool isDueSoon = false;
+    Color subtitleColor = Colors.grey[700]!;
+    IconData timeIcon = Icons.access_time;
+    String reminderTextSuffix = '';
+
+    if (!task.isCompleted && task.scheduledTime != null) {
+      final DateTime now = DateTime.now();
+      final DateTime scheduled = task.scheduledTime!;
+
+      if (scheduled.isBefore(now)) {
+        isOverdue = true;
+        subtitleColor = Colors.red.shade700;
+        timeIcon = Icons.error_outline;
+        reminderTextSuffix = ' (Overdue!)';
+      } else if (scheduled.difference(now) <= const Duration(minutes: 60)) {
+        // Task is due within the next 60 minutes
+        isDueSoon = true;
+        subtitleColor = Colors.orange.shade700;
+        timeIcon = Icons.notification_important_outlined;
+        reminderTextSuffix = ' (Due Soon!)';
+      }
+    }
+
     return Card(
       elevation: 3,
       margin: const EdgeInsets.symmetric(vertical: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: task.isCompleted ? Colors.grey[100] : Colors.white,
+      color: task.isCompleted
+          ? Colors.grey[100]
+          : (isOverdue
+              ? Colors.red.shade50
+              : (isDueSoon ? Colors.orange.shade50 : Colors.white)),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4.0),
         child: ListTile(
@@ -314,6 +487,31 @@ class TaskCard extends StatelessWidget {
               color: task.isCompleted ? Colors.grey[600] : Colors.black87,
             ),
           ),
+          subtitle: task.scheduledTime != null
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(timeIcon, size: 16, color: subtitleColor),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          DateFormat('MMM d, hh:mm a').format(task.scheduledTime!) +
+                              reminderTextSuffix,
+                          style: GoogleFonts.lato(
+                            fontSize: 13,
+                            color: subtitleColor,
+                            decoration: task.isCompleted
+                                ? TextDecoration.lineThrough
+                                : TextDecoration.none,
+                          ),
+                          overflow: TextOverflow.ellipsis, // Prevent overflow
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : null,
           leading: Checkbox(
             value: task.isCompleted,
             onChanged: (bool? newValue) {
@@ -327,9 +525,35 @@ class TaskCard extends StatelessWidget {
             icon: const Icon(Icons.delete_outline),
             color: Colors.redAccent,
             onPressed: () {
-              Provider.of<TaskModel>(context, listen: false).removeTask(task.id);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('"${task.title}" deleted')),
+              // Confirm deletion before removing
+              showDialog<bool>(
+                context: context,
+                builder: (BuildContext ctx) {
+                  return AlertDialog(
+                    title: const Text('Confirm Deletion'),
+                    content: Text('Are you sure you want to delete "${task.title}"?'),
+                    actions: <Widget>[
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: () {
+                          Provider.of<TaskModel>(context, listen: false).removeTask(task.id);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('"${task.title}" deleted')),
+                          );
+                          Navigator.of(ctx).pop(true);
+                        },
+                        child: const Text('Delete'),
+                      ),
+                    ],
+                  );
+                },
               );
             },
           ),
