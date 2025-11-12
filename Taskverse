@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -27,7 +29,7 @@ class Task {
 class TaskModel extends ChangeNotifier {
   final List<Task> _tasks = [];
 
-  List<Task> get tasks => [..._tasks];
+  List<Task> get tasks => _tasks;
   int get completed => _tasks.where((t) => t.isCompleted).length;
   int get total => _tasks.length;
 
@@ -41,7 +43,7 @@ class TaskModel extends ChangeNotifier {
   }
 
   void toggleTask(String id) {
-    final i = _tasks.indexWhere((t) => t.id == id);
+    final int i = _tasks.indexWhere((t) => t.id == id);
     if (i != -1) {
       _tasks[i].isCompleted = !_tasks[i].isCompleted;
       notifyListeners();
@@ -51,6 +53,29 @@ class TaskModel extends ChangeNotifier {
   void removeTask(String id) {
     _tasks.removeWhere((t) => t.id == id);
     notifyListeners();
+  }
+
+  void markAllComplete() {
+    for (final Task t in _tasks) {
+      t.isCompleted = true;
+    }
+    notifyListeners();
+  }
+
+  void clearCompleted() {
+    _tasks.removeWhere((t) => t.isCompleted);
+    notifyListeners();
+  }
+
+  // New method to handle reordering tasks within the model
+  void reorderTasks(int oldIndex, int newIndex) {
+    // Adjust newIndex if an item is moved to a position after its original index
+    if (newIndex > oldIndex) {
+      newIndex--;
+    }
+    final Task task = _tasks.removeAt(oldIndex);
+    _tasks.insert(newIndex, task);
+    notifyListeners(); // Notify listeners after the internal list has changed
   }
 }
 
@@ -71,9 +96,9 @@ class ThemeModel extends ChangeNotifier {
 void main() {
   runApp(
     MultiProvider(
-      providers: [
-        ChangeNotifierProvider<TaskModel>(create: (_) => TaskModel()),
-        ChangeNotifierProvider<ThemeModel>(create: (_) => ThemeModel()),
+      providers: <ChangeNotifierProvider<ChangeNotifier>>[
+        ChangeNotifierProvider<TaskModel>(create: (BuildContext _) => TaskModel()),
+        ChangeNotifierProvider<ThemeModel>(create: (BuildContext _) => ThemeModel()),
       ],
       child: const TodoApp(),
     ),
@@ -91,7 +116,7 @@ class TodoApp extends StatelessWidget {
       builder: (BuildContext context, ThemeModel theme, Widget? child) =>
           MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'TaskVerse 🤖', // Changed title here
+        title: 'TaskVerse 🤖',
         themeMode: theme.mode,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
@@ -123,6 +148,9 @@ class TodoScreen extends StatefulWidget {
 class _TodoScreenState extends State<TodoScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  String _searchQuery = '';
+  String _sortOption = 'None';
+
   final List<String> quotes = <String>[
     "“Focus on being productive, not busy.”",
     "“Small steps every day lead to big results.”",
@@ -133,9 +161,9 @@ class _TodoScreenState extends State<TodoScreen>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-        vsync: this, duration: const Duration(seconds: 10))
-      ..repeat();
+    _controller =
+        AnimationController(vsync: this, duration: const Duration(seconds: 10))
+          ..repeat();
   }
 
   @override
@@ -145,7 +173,7 @@ class _TodoScreenState extends State<TodoScreen>
   }
 
   void _addTask(BuildContext context) {
-    showDialog<void>(context: context, builder: (_) => const AddTaskDialog());
+    showDialog<void>(context: context, builder: (BuildContext _) => const AddTaskDialog());
   }
 
   @override
@@ -188,8 +216,9 @@ class _TodoScreenState extends State<TodoScreen>
                           mainAxisAlignment: MainAxisAlignment.end,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
+                            // Removed "Good [Time of day], Harika 👋" greeting
                             Text(
-                              "TaskVerse 🤖", // Changed text here
+                              "TaskVerse 🤖",
                               style: GoogleFonts.poppins(
                                 fontSize: 34,
                                 fontWeight: FontWeight.bold,
@@ -225,18 +254,79 @@ class _TodoScreenState extends State<TodoScreen>
                     ),
                     onPressed: theme.toggle,
                   ),
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, color: Colors.white),
+                    onSelected: (String value) {
+                      final TaskModel taskModel =
+                          Provider.of<TaskModel>(context, listen: false);
+                      if (value == 'complete') {
+                        taskModel.markAllComplete();
+                      } else if (value == 'clear') {
+                        taskModel.clearCompleted();
+                      } else {
+                        setState(() => _sortOption = value);
+                      }
+                    },
+                    itemBuilder: (BuildContext _) => const <PopupMenuItem<String>>[
+                      PopupMenuItem<String>(
+                          value: 'Name', child: Text('Sort by Name')),
+                      PopupMenuItem<String>(
+                          value: 'Time', child: Text('Sort by Time')),
+                      PopupMenuItem<String>(
+                          value: 'complete',
+                          child: Text('Mark All Completed')),
+                      PopupMenuItem<String>(
+                          value: 'clear', child: Text('Clear Completed')),
+                    ],
+                  ),
                 ],
               ),
+
+              // 🔍 Search Bar
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search tasks...',
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onChanged: (String value) =>
+                        setState(() => _searchQuery = value.toLowerCase()),
+                  ),
+                ),
+              ),
+
+              // 📦 Task List
               SliverPadding(
                 padding: const EdgeInsets.all(16),
                 sliver: Consumer<TaskModel>(
                   builder:
                       (BuildContext context, TaskModel model, Widget? child) {
-                    if (model.tasks.isEmpty) {
+                    List<Task> filtered = model.tasks
+                        .where((Task t) =>
+                            t.title.toLowerCase().contains(_searchQuery))
+                        .toList();
+
+                    if (_sortOption == 'Name') {
+                      filtered.sort((Task a, Task b) => a.title.compareTo(b.title));
+                    } else if (_sortOption == 'Time') {
+                      filtered.sort((Task a, Task b) {
+                        if (a.scheduledTime == null) return 1;
+                        if (b.scheduledTime == null) return -1;
+                        return a.scheduledTime!.compareTo(b.scheduledTime!);
+                      });
+                    }
+
+                    if (filtered.isEmpty) {
                       return SliverFillRemaining(
                         child: Center(
                           child: Text(
-                            '✨ No tasks yet!',
+                            '✨ No tasks found!',
                             style: GoogleFonts.poppins(
                               color: Colors.white70,
                               fontSize: 18,
@@ -245,13 +335,55 @@ class _TodoScreenState extends State<TodoScreen>
                         ),
                       );
                     }
-                    return SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (BuildContext context, int i) {
-                          final Task t = model.tasks[i];
-                          return TaskCard(task: t);
+
+                    return SliverToBoxAdapter(
+                      child: ReorderableListView(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        onReorder: (int oldIndex, int newIndex) {
+                          // Delegate the reordering logic to the TaskModel
+                          // The model will update its internal list and call notifyListeners,
+                          // which will cause the Consumer to rebuild this widget.
+                          model.reorderTasks(oldIndex, newIndex);
                         },
-                        childCount: model.tasks.length,
+                        children: <Widget>[
+                          for (final Task t in filtered)
+                            Dismissible(
+                              key: ValueKey<String>(t.id),
+                              background: Container(
+                                color: Colors.redAccent,
+                                alignment: Alignment.centerLeft,
+                                padding: const EdgeInsets.only(left: 20),
+                                child: const Icon(Icons.delete,
+                                    color: Colors.white),
+                              ),
+                              secondaryBackground: Container(
+                                color: Colors.redAccent,
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 20),
+                                child: const Icon(Icons.delete,
+                                    color: Colors.white),
+                              ),
+                              onDismissed: (DismissDirection _) {
+                                final Task removedTask = t;
+                                model.removeTask(t.id);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content:
+                                        Text('Deleted "${t.title}"'),
+                                    action: SnackBarAction(
+                                      label: 'UNDO',
+                                      onPressed: () {
+                                        model.addTask(removedTask.title,
+                                            removedTask.scheduledTime);
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: TaskCard(key: ValueKey<String>(t.id), task: t),
+                            ),
+                        ],
                       ),
                     );
                   },
@@ -316,7 +448,8 @@ class TaskCard extends StatelessWidget {
           shape: const CircleBorder(),
           value: task.isCompleted,
           onChanged: (bool? _) {
-            Provider.of<TaskModel>(context, listen: false).toggleTask(task.id);
+            Provider.of<TaskModel>(context, listen: false)
+                .toggleTask(task.id);
           },
         ),
         title: Text(
@@ -345,15 +478,6 @@ class TaskCard extends StatelessWidget {
                             : Colors.white70),
               )
             : null,
-        trailing: IconButton(
-          icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-          onPressed: () {
-            Provider.of<TaskModel>(context, listen: false).removeTask(task.id);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Deleted "${task.title}"')),
-            );
-          },
-        ),
       ),
     );
   }
@@ -374,9 +498,7 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
   TimeOfDay? _time;
 
   void _add() {
-    if (_controller.text.trim().isEmpty) {
-      return;
-    }
+    if (_controller.text.trim().isEmpty) return;
     DateTime? schedule;
     if (_date != null) {
       schedule = DateTime(_date!.year, _date!.month, _date!.day,
@@ -412,9 +534,7 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
                       lastDate: DateTime(2100),
                       initialDate: DateTime.now(),
                     );
-                    if (picked != null) {
-                      setState(() => _date = picked);
-                    }
+                    if (picked != null) setState(() => _date = picked);
                   },
                 ),
               ),
@@ -426,9 +546,7 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
                   onPressed: () async {
                     final TimeOfDay? t = await showTimePicker(
                         context: context, initialTime: TimeOfDay.now());
-                    if (t != null) {
-                      setState(() => _time = t);
-                    }
+                    if (t != null) setState(() => _time = t);
                   },
                 ),
               ),
@@ -458,7 +576,6 @@ class NeonBackgroundPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final Paint paint = Paint()..blendMode = BlendMode.srcOver;
 
-    // Dynamic gradient layer
     final LinearGradient gradient = LinearGradient(
       colors: dark
           ? <Color>[Colors.deepPurple.shade900, Colors.black]
@@ -470,7 +587,6 @@ class NeonBackgroundPainter extends CustomPainter {
         gradient.createShader(Rect.fromLTWH(0, 0, size.width, size.height));
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
 
-    // Glowing orbs
     final Paint orbPaint = Paint()
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 80)
       ..color = dark
