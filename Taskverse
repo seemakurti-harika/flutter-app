@@ -5,10 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-
-// ======================================================
 // 1️⃣ MODEL
-// ======================================================
 class Task {
   final String id;
   final String title;
@@ -22,10 +19,7 @@ class Task {
     this.scheduledTime,
   });
 }
-
-// ======================================================
 // 2️⃣ STATE MANAGEMENT
-// ======================================================
 class TaskModel extends ChangeNotifier {
   final List<Task> _tasks = [];
 
@@ -89,10 +83,7 @@ class ThemeModel extends ChangeNotifier {
     notifyListeners();
   }
 }
-
-// ======================================================
 // 3️⃣ MAIN ENTRY
-// ======================================================
 void main() {
   runApp(
     MultiProvider(
@@ -104,10 +95,7 @@ void main() {
     ),
   );
 }
-
-// ======================================================
 // 4️⃣ ROOT APP
-// ======================================================
 class TodoApp extends StatelessWidget {
   const TodoApp({super.key});
   @override
@@ -135,10 +123,7 @@ class TodoApp extends StatelessWidget {
     );
   }
 }
-
-// ======================================================
 // 5️⃣ MAIN SCREEN
-// ======================================================
 class TodoScreen extends StatefulWidget {
   const TodoScreen({super.key});
   @override
@@ -401,10 +386,7 @@ class _TodoScreenState extends State<TodoScreen>
     );
   }
 }
-
-// ======================================================
 // 6️⃣ TASK CARD
-// ======================================================
 class TaskCard extends StatelessWidget {
   final Task task;
   const TaskCard({required this.task, super.key});
@@ -482,10 +464,7 @@ class TaskCard extends StatelessWidget {
     );
   }
 }
-
-// ======================================================
 // 7️⃣ ADD TASK DIALOG
-// ======================================================
 class AddTaskDialog extends StatefulWidget {
   const AddTaskDialog({super.key});
   @override
@@ -563,10 +542,7 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
     );
   }
 }
-
-// ======================================================
 // 8️⃣ ANIMATED BACKGROUND PAINTER
-// ======================================================
 class NeonBackgroundPainter extends CustomPainter {
   final double progress;
   final bool dark;
