@@ -1,0 +1,489 @@
+import 'dart:math';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+// ======================================================
+// 1️⃣ MODEL
+// ======================================================
+class Task {
+  final String id;
+  final String title;
+  bool isCompleted;
+  final DateTime? scheduledTime;
+
+  Task({
+    required this.id,
+    required this.title,
+    this.isCompleted = false,
+    this.scheduledTime,
+  });
+}
+
+// ======================================================
+// 2️⃣ STATE MANAGEMENT
+// ======================================================
+class TaskModel extends ChangeNotifier {
+  final List<Task> _tasks = [];
+
+  List<Task> get tasks => [..._tasks];
+  int get completed => _tasks.where((t) => t.isCompleted).length;
+  int get total => _tasks.length;
+
+  void addTask(String title, DateTime? time) {
+    _tasks.add(Task(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: title,
+      scheduledTime: time,
+    ));
+    notifyListeners();
+  }
+
+  void toggleTask(String id) {
+    final i = _tasks.indexWhere((t) => t.id == id);
+    if (i != -1) {
+      _tasks[i].isCompleted = !_tasks[i].isCompleted;
+      notifyListeners();
+    }
+  }
+
+  void removeTask(String id) {
+    _tasks.removeWhere((t) => t.id == id);
+    notifyListeners();
+  }
+}
+
+class ThemeModel extends ChangeNotifier {
+  bool _dark = false;
+  bool get dark => _dark;
+  ThemeMode get mode => _dark ? ThemeMode.dark : ThemeMode.light;
+
+  void toggle() {
+    _dark = !_dark;
+    notifyListeners();
+  }
+}
+
+// ======================================================
+// 3️⃣ MAIN ENTRY
+// ======================================================
+void main() {
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<TaskModel>(create: (_) => TaskModel()),
+        ChangeNotifierProvider<ThemeModel>(create: (_) => ThemeModel()),
+      ],
+      child: const TodoApp(),
+    ),
+  );
+}
+
+// ======================================================
+// 4️⃣ ROOT APP
+// ======================================================
+class TodoApp extends StatelessWidget {
+  const TodoApp({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<ThemeModel>(
+      builder: (BuildContext context, ThemeModel theme, Widget? child) =>
+          MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'TaskVerse 🤖', // Changed title here
+        themeMode: theme.mode,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+          useMaterial3: true,
+          textTheme: GoogleFonts.poppinsTextTheme(),
+        ),
+        darkTheme: ThemeData.dark().copyWith(
+          textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.deepPurple,
+            brightness: Brightness.dark,
+          ),
+        ),
+        home: const TodoScreen(),
+      ),
+    );
+  }
+}
+
+// ======================================================
+// 5️⃣ MAIN SCREEN
+// ======================================================
+class TodoScreen extends StatefulWidget {
+  const TodoScreen({super.key});
+  @override
+  State<TodoScreen> createState() => _TodoScreenState();
+}
+
+class _TodoScreenState extends State<TodoScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  final List<String> quotes = <String>[
+    "“Focus on being productive, not busy.”",
+    "“Small steps every day lead to big results.”",
+    "“Action is the foundational key to all success.”",
+    "“You can do this, one task at a time.”",
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(seconds: 10))
+      ..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _addTask(BuildContext context) {
+    showDialog<void>(context: context, builder: (_) => const AddTaskDialog());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeModel theme = Provider.of<ThemeModel>(context);
+    final String quote = quotes[DateTime.now().second % quotes.length];
+
+    return Scaffold(
+      body: Stack(
+        children: <Widget>[
+          // 🟣 Animated Background
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (BuildContext context, Widget? child) {
+              return CustomPaint(
+                painter: NeonBackgroundPainter(
+                  progress: _controller.value,
+                  dark: theme.dark,
+                ),
+                child: Container(),
+              );
+            },
+          ),
+          // 📋 Task content
+          CustomScrollView(
+            slivers: <Widget>[
+              SliverAppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                expandedHeight: 180,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Align(
+                      alignment: Alignment.bottomLeft,
+                      child: Consumer<TaskModel>(
+                        builder: (BuildContext context, TaskModel model,
+                                Widget? child) =>
+                            Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              "TaskVerse 🤖", // Changed text here
+                              style: GoogleFonts.poppins(
+                                fontSize: 34,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              quote,
+                              style: const TextStyle(
+                                  color: Colors.white70, fontSize: 14),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              model.total == 0
+                                  ? "Tap + to add a task"
+                                  : "${model.completed}/${model.total} tasks done",
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 16),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                actions: <Widget>[
+                  IconButton(
+                    icon: Icon(
+                      theme.dark
+                          ? Icons.light_mode_outlined
+                          : Icons.dark_mode_outlined,
+                      color: Colors.white,
+                    ),
+                    onPressed: theme.toggle,
+                  ),
+                ],
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.all(16),
+                sliver: Consumer<TaskModel>(
+                  builder:
+                      (BuildContext context, TaskModel model, Widget? child) {
+                    if (model.tasks.isEmpty) {
+                      return SliverFillRemaining(
+                        child: Center(
+                          child: Text(
+                            '✨ No tasks yet!',
+                            style: GoogleFonts.poppins(
+                              color: Colors.white70,
+                              fontSize: 18,
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    return SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (BuildContext context, int i) {
+                          final Task t = model.tasks[i];
+                          return TaskCard(task: t);
+                        },
+                        childCount: model.tasks.length,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.purpleAccent,
+        onPressed: () => _addTask(context),
+        child: const Icon(Icons.add, size: 30),
+      ),
+    );
+  }
+}
+
+// ======================================================
+// 6️⃣ TASK CARD
+// ======================================================
+class TaskCard extends StatelessWidget {
+  final Task task;
+  const TaskCard({required this.task, super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    bool overdue = false;
+    bool soon = false;
+    if (task.scheduledTime != null && !task.isCompleted) {
+      final Duration diff = task.scheduledTime!.difference(DateTime.now());
+      if (diff.isNegative) {
+        overdue = true;
+      } else if (diff.inMinutes <= 60) {
+        soon = true;
+      }
+    }
+
+    final Color bg = overdue
+        ? Colors.red.withOpacity(0.15)
+        : soon
+            ? Colors.orange.withOpacity(0.15)
+            : Colors.white.withOpacity(0.25);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white24),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+        backgroundBlendMode: BlendMode.overlay,
+      ),
+      child: ListTile(
+        leading: Checkbox(
+          shape: const CircleBorder(),
+          value: task.isCompleted,
+          onChanged: (bool? _) {
+            Provider.of<TaskModel>(context, listen: false).toggleTask(task.id);
+          },
+        ),
+        title: Text(
+          task.title,
+          style: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            decoration: task.isCompleted
+                ? TextDecoration.lineThrough
+                : TextDecoration.none,
+          ),
+        ),
+        subtitle: task.scheduledTime != null
+            ? Text(
+                DateFormat('MMM d, hh:mm a').format(task.scheduledTime!) +
+                    (overdue
+                        ? " (Overdue)"
+                        : soon
+                            ? " (Soon)"
+                            : ""),
+                style: TextStyle(
+                    color: overdue
+                        ? Colors.redAccent
+                        : soon
+                            ? Colors.orangeAccent
+                            : Colors.white70),
+              )
+            : null,
+        trailing: IconButton(
+          icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+          onPressed: () {
+            Provider.of<TaskModel>(context, listen: false).removeTask(task.id);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Deleted "${task.title}"')),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+// ======================================================
+// 7️⃣ ADD TASK DIALOG
+// ======================================================
+class AddTaskDialog extends StatefulWidget {
+  const AddTaskDialog({super.key});
+  @override
+  State<AddTaskDialog> createState() => _AddTaskDialogState();
+}
+
+class _AddTaskDialogState extends State<AddTaskDialog> {
+  final TextEditingController _controller = TextEditingController();
+  DateTime? _date;
+  TimeOfDay? _time;
+
+  void _add() {
+    if (_controller.text.trim().isEmpty) {
+      return;
+    }
+    DateTime? schedule;
+    if (_date != null) {
+      schedule = DateTime(_date!.year, _date!.month, _date!.day,
+          _time?.hour ?? 0, _time?.minute ?? 0);
+    }
+    Provider.of<TaskModel>(context, listen: false)
+        .addTask(_controller.text.trim(), schedule);
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add Task'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          TextField(
+            controller: _controller,
+            decoration: const InputDecoration(labelText: 'Task name'),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.calendar_today),
+                  label: const Text('Date'),
+                  onPressed: () async {
+                    final DateTime? picked = await showDatePicker(
+                      context: context,
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime(2100),
+                      initialDate: DateTime.now(),
+                    );
+                    if (picked != null) {
+                      setState(() => _date = picked);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.access_time),
+                  label: const Text('Time'),
+                  onPressed: () async {
+                    final TimeOfDay? t = await showTimePicker(
+                        context: context, initialTime: TimeOfDay.now());
+                    if (t != null) {
+                      setState(() => _time = t);
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: <Widget>[
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
+        ElevatedButton(onPressed: _add, child: const Text('Add')),
+      ],
+    );
+  }
+}
+
+// ======================================================
+// 8️⃣ ANIMATED BACKGROUND PAINTER
+// ======================================================
+class NeonBackgroundPainter extends CustomPainter {
+  final double progress;
+  final bool dark;
+  NeonBackgroundPainter({required this.progress, required this.dark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()..blendMode = BlendMode.srcOver;
+
+    // Dynamic gradient layer
+    final LinearGradient gradient = LinearGradient(
+      colors: dark
+          ? <Color>[Colors.deepPurple.shade900, Colors.black]
+          : <Color>[Colors.purpleAccent, Colors.blueAccent],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+    paint.shader =
+        gradient.createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+
+    // Glowing orbs
+    final Paint orbPaint = Paint()
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 80)
+      ..color = dark
+          ? Colors.purpleAccent.withOpacity(0.3)
+          : Colors.white.withOpacity(0.25);
+
+    for (int i = 0; i < 4; i++) {
+      final double dx = size.width * (0.2 + 0.6 * sin(progress * 2 * pi + i));
+      final double dy = size.height * (0.3 + 0.5 * cos(progress * 2 * pi + i));
+      canvas.drawCircle(Offset(dx, dy), 120, orbPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant NeonBackgroundPainter oldDelegate) => true;
+}
