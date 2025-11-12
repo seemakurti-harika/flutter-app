@@ -1,282 +1,288 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart'; // Allowed package for date/time formatting
+import 'package:intl/intl.dart';
 
-// --- 1. Model Definition (Data Structure) ---
+// ===========================
+// 1️⃣ MODEL: Task Definition
+// ===========================
 class Task {
   final String id;
   final String title;
   bool isCompleted;
-  final DateTime? scheduledTime; // New: Optional scheduled time for the task
+  final DateTime? scheduledTime;
 
   Task({
     required this.id,
     required this.title,
     this.isCompleted = false,
-    this.scheduledTime, // Initialize scheduledTime
+    this.scheduledTime,
   });
 }
 
-// --- 2. State Management (Business Logic) ---
-// TaskModel holds the data and logic, extending ChangeNotifier.
+// ===========================
+// 2️⃣ STATE: TaskModel
+// ===========================
 class TaskModel extends ChangeNotifier {
-  List<Task> _tasks = <Task>[];
+  final List<Task> _tasks = [];
 
-  // Getter to provide a copy of the tasks list (best practice)
-  List<Task> get tasks => <Task>[..._tasks];
+  List<Task> get tasks => [..._tasks];
 
-  // New: Getter for the count of completed tasks
-  int get completedTaskCount => _tasks.where((Task task) => task.isCompleted).length;
-
-  // New: Getter for the total number of tasks
+  int get completedTaskCount => _tasks.where((t) => t.isCompleted).length;
   int get totalTaskCount => _tasks.length;
-
-  // New: Getter to check if all tasks are completed
-  bool get areAllTasksCompleted => totalTaskCount > 0 && completedTaskCount == totalTaskCount;
+  bool get areAllTasksCompleted =>
+      totalTaskCount > 0 && completedTaskCount == totalTaskCount;
 
   void addTask(String title, DateTime? scheduledTime) {
     if (title.isNotEmpty) {
       _tasks.add(Task(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: title,
-        isCompleted: false,
-        scheduledTime: scheduledTime, // Pass scheduledTime to the task
+        scheduledTime: scheduledTime,
       ));
-      // Notify listeners (UI widgets) that the data has changed.
       notifyListeners();
     }
   }
 
   void toggleTaskCompletion(String id) {
-    final int taskIndex = _tasks.indexWhere((Task task) => task.id == id);
-    if (taskIndex != -1) {
-      _tasks[taskIndex].isCompleted = !_tasks[taskIndex].isCompleted;
+    final idx = _tasks.indexWhere((t) => t.id == id);
+    if (idx != -1) {
+      _tasks[idx].isCompleted = !_tasks[idx].isCompleted;
       notifyListeners();
     }
   }
 
   void removeTask(String id) {
-    _tasks.removeWhere((Task task) => task.id == id);
+    _tasks.removeWhere((t) => t.id == id);
     notifyListeners();
   }
 }
 
-// --- 3. Main Application Setup ---
+// ===========================
+// 3️⃣ STATE: ThemeModel
+// ===========================
+class ThemeModel extends ChangeNotifier {
+  bool _isDarkMode = false;
+
+  bool get isDarkMode => _isDarkMode;
+  ThemeMode get themeMode => _isDarkMode ? ThemeMode.dark : ThemeMode.light;
+
+  void toggleTheme() {
+    _isDarkMode = !_isDarkMode;
+    notifyListeners();
+  }
+}
+
+// ===========================
+// 4️⃣ MAIN FUNCTION
+// ===========================
 void main() {
-  // We wrap the entire app in a ChangeNotifierProvider.
-  // This makes the single instance of TaskModel available to all descendant widgets.
   runApp(
-    ChangeNotifierProvider<TaskModel>(
-      create: (BuildContext context) => TaskModel(),
-      builder: (BuildContext context, Widget? child) => const TodoApp(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => TaskModel()),
+        ChangeNotifierProvider(create: (_) => ThemeModel()),
+      ],
+      child: const TodoApp(),
     ),
   );
 }
 
+// ===========================
+// 5️⃣ APP ROOT
+// ===========================
 class TodoApp extends StatelessWidget {
   const TodoApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'My Task List',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple)
-            .copyWith(secondary: Colors.deepOrangeAccent),
-        useMaterial3: true,
-        fontFamily: GoogleFonts.lato().fontFamily, // Apply a global font
-        listTileTheme: ListTileThemeData(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        ),
-      ),
-      home: const TodoScreen(),
-      debugShowCheckedModeBanner: false, // Remove the debug banner
+    return Consumer<ThemeModel>(
+      builder: (context, themeModel, _) {
+        return MaterialApp(
+          title: 'My Task List',
+          debugShowCheckedModeBanner: false,
+          themeMode: themeModel.themeMode,
+          theme: ThemeData(
+            brightness: Brightness.light,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.deepPurple,
+              brightness: Brightness.light,
+            ),
+            useMaterial3: true,
+            textTheme: GoogleFonts.poppinsTextTheme(),
+          ),
+          darkTheme: ThemeData(
+            brightness: Brightness.dark,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.deepPurple,
+              brightness: Brightness.dark,
+            ),
+            useMaterial3: true,
+            textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
+          ),
+          home: const TodoScreen(),
+        );
+      },
     );
   }
 }
 
-// --- 4. UI Implementation (StatelessWidget) ---
+// ===========================
+// 6️⃣ TODO SCREEN (Main UI)
+// ===========================
 class TodoScreen extends StatelessWidget {
   const TodoScreen({super.key});
 
-  // A helper function to display a dialog for adding a new task
   void _showAddTaskDialog(BuildContext context) {
-    showDialog<void>(
+    showDialog(
       context: context,
-      builder: (BuildContext ctx) {
-        return const AddTaskDialog(); // Use the new stateful dialog widget
-      },
+      builder: (_) => const AddTaskDialog(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: <Widget>[
-          SliverAppBar(
-            expandedHeight: 180.0,
-            floating: true,
-            pinned: false,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: <Color>[
-                      Theme.of(context).colorScheme.primary,
-                      Theme.of(context).colorScheme.primaryContainer,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        'My Task List',
-                        style: GoogleFonts.lato(
-                          fontSize: 34,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Consumer<TaskModel>(
-                        builder: (BuildContext context, TaskModel model, Widget? child) {
-                          if (model.totalTaskCount == 0) {
-                            return const SizedBox.shrink(); // No tasks, hide stats
-                          }
+    final themeModel = Provider.of<ThemeModel>(context);
 
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                '${model.completedTaskCount} of ${model.totalTaskCount} tasks completed',
-                                style: GoogleFonts.lato(
-                                  fontSize: 16,
-                                  color: Colors.white70,
-                                ),
-                              ),
-                              if (model.areAllTasksCompleted)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4.0),
-                                  child: Text(
-                                    'All tasks completed!',
-                                    style: GoogleFonts.lato(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
+    return Scaffold(
+      body: Stack(
+        children: [
+          // Gradient background
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 600),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: themeModel.isDarkMode
+                    ? [Colors.black87, Colors.deepPurple.shade900]
+                    : [Colors.deepPurple.shade300, Colors.blueAccent.shade100],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
           ),
-          SliverPadding(
-            padding: const EdgeInsets.all(12),
-            sliver: Consumer<TaskModel>(
-              builder: (BuildContext context, TaskModel model, Widget? child) {
-                if (model.tasks.isEmpty) {
-                  return SliverFillRemaining(
-                    child: Center(
+          CustomScrollView(
+            slivers: [
+              SliverAppBar(
+                expandedHeight: 200,
+                floating: true,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Align(
+                      alignment: Alignment.bottomLeft,
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: <Widget>[
-                          Icon(Icons.checklist_rtl, size: 60, color: Colors.grey[400]),
-                          const SizedBox(height: 16),
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            'No tasks yet!\nTap the + button to add one.',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.lato(
-                              fontSize: 18,
-                              color: Colors.grey[600],
+                            '🗒️ My Task List',
+                            style: GoogleFonts.poppins(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
+                          ),
+                          const SizedBox(height: 6),
+                          Consumer<TaskModel>(
+                            builder: (context, model, _) {
+                              return Text(
+                                model.totalTaskCount == 0
+                                    ? 'No tasks yet. Add one!'
+                                    : '${model.completedTaskCount} of ${model.totalTaskCount} tasks completed',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white70,
+                                  fontSize: 16,
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),
                     ),
-                  );
-                }
-                return SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (BuildContext context, int index) {
-                      final Task task = model.tasks[index];
-                      return Dismissible(
-                        key: ValueKey<String>(task.id),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          color: Colors.redAccent,
-                          child: const Icon(Icons.delete_forever, color: Colors.white, size: 36),
-                        ),
-                        confirmDismiss: (DismissDirection direction) async {
-                          return await showDialog<bool>(
-                            context: context,
-                            builder: (BuildContext ctx) {
-                              return AlertDialog(
-                                title: const Text('Confirm Deletion'),
-                                content: Text('Are you sure you want to delete "${task.title}"?'),
-                                actions: <Widget>[
-                                  TextButton(
-                                    onPressed: () => Navigator.of(ctx).pop(false),
-                                    child: const Text('Cancel'),
-                                  ),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.red,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    onPressed: () => Navigator.of(ctx).pop(true),
-                                    child: const Text('Delete'),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-                        },
-                        onDismissed: (DismissDirection direction) {
-                          Provider.of<TaskModel>(context, listen: false).removeTask(task.id);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('"${task.title}" dismissed')),
-                          );
-                        },
-                        child: TaskCard(task: task),
-                      );
-                    },
-                    childCount: model.tasks.length,
                   ),
-                );
-              },
-            ),
+                ),
+                actions: [
+                  IconButton(
+                    icon: Icon(
+                      themeModel.isDarkMode
+                          ? Icons.light_mode_outlined
+                          : Icons.dark_mode_outlined,
+                      color: Colors.white,
+                      size: 26,
+                    ),
+                    tooltip: themeModel.isDarkMode
+                        ? 'Switch to Light Mode'
+                        : 'Switch to Dark Mode',
+                    onPressed: themeModel.toggleTheme,
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.all(16),
+                sliver: Consumer<TaskModel>(
+                  builder: (context, model, _) {
+                    if (model.tasks.isEmpty) {
+                      return SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: Text(
+                            '✨ Nothing here yet!\nTap + to add your first task.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 18,
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    return SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final task = model.tasks[index];
+                          return AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 300),
+                            child: TaskCard(task: task, key: ValueKey(task.id)),
+                          );
+                        },
+                        childCount: model.tasks.length,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddTaskDialog(context),
-        tooltip: 'Add New Task',
-        backgroundColor: Theme.of(context).colorScheme.secondary,
-        foregroundColor: Colors.white,
-        child: const Icon(Icons.add),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.deepPurpleAccent.withOpacity(0.5),
+              blurRadius: 15,
+              spreadRadius: 3,
+            ),
+          ],
+        ),
+        child: FloatingActionButton(
+          backgroundColor: Colors.deepPurpleAccent,
+          onPressed: () => _showAddTaskDialog(context),
+          child: const Icon(Icons.add, size: 28),
+        ),
       ),
     );
   }
 }
 
-// New Widget: AddTaskDialog for date/time input
+// ===========================
+// 7️⃣ ADD TASK DIALOG
+// ===========================
 class AddTaskDialog extends StatefulWidget {
   const AddTaskDialog({super.key});
 
@@ -285,13 +291,13 @@ class AddTaskDialog extends StatefulWidget {
 }
 
 class _AddTaskDialogState extends State<AddTaskDialog> {
-  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _controller = TextEditingController();
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
 
   @override
   void dispose() {
-    _titleController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -299,36 +305,25 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate ?? DateTime.now(),
-      firstDate: DateTime.now().subtract(const Duration(days: 365)), // A year ago
-      lastDate: DateTime.now().add(const Duration(days: 365 * 5)), // 5 years from now
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-    if (picked != null && picked != _selectedDate) {
-      setState(() {
-        _selectedDate = picked;
-      });
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
     }
   }
 
   Future<void> _pickTime() async {
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: _selectedTime ?? TimeOfDay.now(),
-    );
-    if (picked != null && picked != _selectedTime) {
-      setState(() {
-        _selectedTime = picked;
-      });
+    final TimeOfDay? picked =
+        await showTimePicker(context: context, initialTime: TimeOfDay.now());
+    if (picked != null) {
+      setState(() => _selectedTime = picked);
     }
   }
 
   void _addTask() {
-    final String title = _titleController.text.trim();
-    if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Task title cannot be empty')),
-      );
-      return;
-    }
+    final title = _controller.text.trim();
+    if (title.isEmpty) return;
 
     DateTime? scheduledDateTime;
     if (_selectedDate != null) {
@@ -343,7 +338,7 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
 
     Provider.of<TaskModel>(context, listen: false)
         .addTask(title, scheduledDateTime);
-    Navigator.of(context).pop();
+    Navigator.pop(context);
   }
 
   @override
@@ -352,24 +347,21 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
       title: const Text('Add New Task'),
       content: SingleChildScrollView(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
+          children: [
             TextField(
-              controller: _titleController,
-              autofocus: true,
+              controller: _controller,
               decoration: const InputDecoration(
-                hintText: 'e.g., Buy groceries',
                 labelText: 'Task Title',
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Row(
-              children: <Widget>[
+              children: [
                 Expanded(
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.calendar_today),
-                    label: const Text('Select Date'),
+                    label: const Text('Date'),
                     onPressed: _pickDate,
                   ),
                 ),
@@ -377,48 +369,25 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
                 Expanded(
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.access_time),
-                    label: const Text('Select Time'),
+                    label: const Text('Time'),
                     onPressed: _pickTime,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            if (_selectedDate != null || _selectedTime != null)
-              Container(
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[200]!),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Scheduled:',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    if (_selectedDate != null)
-                      Text(
-                        DateFormat('EEE, MMM d, yyyy').format(_selectedDate!),
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                    if (_selectedTime != null)
-                      Text(
-                        _selectedTime!.format(context),
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                  ],
-                ),
+            if (_selectedDate != null || _selectedTime != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Scheduled: ${_selectedDate != null ? DateFormat('MMM d, yyyy').format(_selectedDate!) : ''}'
+                '${_selectedTime != null ? ' ${_selectedTime!.format(context)}' : ''}',
               ),
+            ],
           ],
         ),
       ),
-      actions: <Widget>[
+      actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         ElevatedButton(
@@ -430,133 +399,82 @@ class _AddTaskDialogState extends State<AddTaskDialog> {
   }
 }
 
-// New Widget: TaskCard to encapsulate the display of a single task
+// ===========================
+// 8️⃣ TASK CARD
+// ===========================
 class TaskCard extends StatelessWidget {
   final Task task;
-
   const TaskCard({required this.task, super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Determine reminder status for visual cues
     bool isOverdue = false;
     bool isDueSoon = false;
-    Color subtitleColor = Colors.grey[700]!;
-    IconData timeIcon = Icons.access_time;
-    String reminderTextSuffix = '';
+    Color accent = Colors.grey;
 
     if (!task.isCompleted && task.scheduledTime != null) {
-      final DateTime now = DateTime.now();
-      final DateTime scheduled = task.scheduledTime!;
-
-      if (scheduled.isBefore(now)) {
+      final now = DateTime.now();
+      final due = task.scheduledTime!;
+      if (due.isBefore(now)) {
         isOverdue = true;
-        subtitleColor = Colors.red.shade700;
-        timeIcon = Icons.error_outline;
-        reminderTextSuffix = ' (Overdue!)';
-      } else if (scheduled.difference(now) <= const Duration(minutes: 60)) {
-        // Task is due within the next 60 minutes
+        accent = Colors.redAccent;
+      } else if (due.difference(now) <= const Duration(hours: 1)) {
         isDueSoon = true;
-        subtitleColor = Colors.orange.shade700;
-        timeIcon = Icons.notification_important_outlined;
-        reminderTextSuffix = ' (Due Soon!)';
+        accent = Colors.orangeAccent;
       }
     }
 
-    return Card(
-      elevation: 3,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: task.isCompleted
-          ? Colors.grey[100]
-          : (isOverdue
-              ? Colors.red.shade50
-              : (isDueSoon ? Colors.orange.shade50 : Colors.white)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4.0),
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-          title: Text(
-            task.title,
-            style: GoogleFonts.lato(
-              fontSize: 17,
-              fontWeight: FontWeight.w500,
-              decoration: task.isCompleted
-                  ? TextDecoration.lineThrough
-                  : TextDecoration.none,
-              color: task.isCompleted ? Colors.grey[600] : Colors.black87,
-            ),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: task.isCompleted
+            ? Colors.green.withOpacity(0.15)
+            : isOverdue
+                ? Colors.red.withOpacity(0.1)
+                : isDueSoon
+                    ? Colors.orange.withOpacity(0.1)
+                    : Colors.white.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        leading: Checkbox(
+          shape: const CircleBorder(),
+          value: task.isCompleted,
+          onChanged: (_) {
+            Provider.of<TaskModel>(context, listen: false)
+                .toggleTaskCompletion(task.id);
+          },
+        ),
+        title: Text(
+          task.title,
+          style: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            decoration: task.isCompleted
+                ? TextDecoration.lineThrough
+                : TextDecoration.none,
           ),
-          subtitle: task.scheduledTime != null
-              ? Padding(
-                  padding: const EdgeInsets.only(top: 4.0),
-                  child: Row(
-                    children: <Widget>[
-                      Icon(timeIcon, size: 16, color: subtitleColor),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          DateFormat('MMM d, hh:mm a').format(task.scheduledTime!) +
-                              reminderTextSuffix,
-                          style: GoogleFonts.lato(
-                            fontSize: 13,
-                            color: subtitleColor,
-                            decoration: task.isCompleted
-                                ? TextDecoration.lineThrough
-                                : TextDecoration.none,
-                          ),
-                          overflow: TextOverflow.ellipsis, // Prevent overflow
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : null,
-          leading: Checkbox(
-            value: task.isCompleted,
-            onChanged: (bool? newValue) {
-              Provider.of<TaskModel>(context, listen: false)
-                  .toggleTaskCompletion(task.id);
-            },
-            activeColor: Theme.of(context).colorScheme.primary,
-            shape: const CircleBorder(),
-          ),
-          trailing: IconButton(
-            icon: const Icon(Icons.delete_outline),
-            color: Colors.redAccent,
-            onPressed: () {
-              // Confirm deletion before removing
-              showDialog<bool>(
-                context: context,
-                builder: (BuildContext ctx) {
-                  return AlertDialog(
-                    title: const Text('Confirm Deletion'),
-                    content: Text('Are you sure you want to delete "${task.title}"?'),
-                    actions: <Widget>[
-                      TextButton(
-                        onPressed: () => Navigator.of(ctx).pop(false),
-                        child: const Text('Cancel'),
-                      ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                        ),
-                        onPressed: () {
-                          Provider.of<TaskModel>(context, listen: false).removeTask(task.id);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('"${task.title}" deleted')),
-                          );
-                          Navigator.of(ctx).pop(true);
-                        },
-                        child: const Text('Delete'),
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
-          ),
+        ),
+        subtitle: task.scheduledTime != null
+            ? Text(
+                DateFormat('MMM d, hh:mm a').format(task.scheduledTime!) +
+                    (isOverdue
+                        ? " (Overdue)"
+                        : isDueSoon
+                            ? " (Soon)"
+                            : ""),
+                style: TextStyle(color: accent),
+              )
+            : null,
+        trailing: IconButton(
+          icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+          onPressed: () {
+            Provider.of<TaskModel>(context, listen: false).removeTask(task.id);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('"${task.title}" deleted')),
+            );
+          },
         ),
       ),
     );
